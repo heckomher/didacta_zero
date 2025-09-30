@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'bootstrap5',
+    'didacta_calendar',
 ]
 
 MIDDLEWARE = [
@@ -75,9 +77,25 @@ WSGI_APPLICATION = 'didacta.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'didacta_db',
+        'USER': 'didacta_user',
+        'PASSWORD': 'didacta_password',
+        'HOST': 'localhost',
+        'PORT': '5432',
+        'OPTIONS': {
+            'options': '-c search_path=didacta_zero'}
+    },
+    'mongodb': {
+        'ENGINE': 'djongo',
+        'NAME': 'didacta_nosql',
+        'CLIENT': {
+            'host': 'localhost',
+            'port': 27017,
+            'username': 'didacta_user',
+            'password': 'didacta_password',
+            'authSource': 'admin'
+        }
 }
 
 
