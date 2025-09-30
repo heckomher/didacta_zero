@@ -1,0 +1,688 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Gestión de Calendario - Didacta{% endblock %}
+
+{% block extra_css %}
+<style>
+    .calendar-card {
+        border-left: 4px solid #007bff;
+    }
+    .event-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .event-item {
+        border-left: 3px solid #dee2e6;
+        transition: all 0.3s;
+    }
+    .event-item:hover {
+        border-left-color: #007bff;
+        background-color: #f8f9fa;
+    }
+    .event-type-holiday { border-left-color: #dc3545; }
+    .event-type-vacation { border-left-color: #ffc107; }
+    .event-type-exam_period { border-left-color: #fd7e14; }
+    .event-type-parent_meeting { border-left-color: #17a2b8; }
+    .event-type-teacher_meeting { border-left-color: #6f42c1; }
+    .event-type-field_trip { border-left-color: #20c997; }
+    .event-type-ceremony { border-left-color: #e83e8c; }
+    .event-type-emergency { border-left-color: #dc3545; background-color: #f8d7da; }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="h3 mb-2">
+                <i class="bi bi-calendar3"></i> Gestión de Calendario Académico
+            </h1>
+            <p class="text-muted">Administra el calendario y eventos del año escolar</p>
+        </div>
+        <div class="col-md-4 text-end">
+            {% if can_manage_calendar %}
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createCalendarModal">
+                <i class="bi bi-plus-circle"></i> Crear Calendario
+            </button>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createEventModal" 
+                    {% if not current_calendar %}disabled{% endif %}>
+                <i class="bi bi-calendar-plus"></i> Agregar Evento
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Alerts -->
+    <div id="alert-container"></div>
+
+    <!-- Current Calendar Info -->
+    {% if current_calendar %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card calendar-card">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h5 class="card-title mb-1">Calendario Académico {{ current_calendar.academic_year }}</h5>
+                            <p class="text-muted mb-0">
+                                <small>
+                                    <i class="bi bi-calendar-range"></i> 
+                                    {{ current_calendar.year_start_date|date:"d/m/Y" }} - 
+                                    {{ current_calendar.year_end_date|date:"d/m/Y" }}
+                                </small>
+                            </p>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <span class="badge bg-info me-2">1er Semestre: {{ current_calendar.first_semester_start|date:"d/m" }} - {{ current_calendar.first_semester_end|date:"d/m" }}</span>
+                            <span class="badge bg-warning">2do Semestre: {{ current_calendar.second_semester_start|date:"d/m" }} - {{ current_calendar.second_semester_end|date:"d/m" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Month/Year Selector -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="input-group">
+                <select id="monthSelector" class="form-select">
+                    {% for month in "123456789101112" %}
+                    <option value="{{ month }}" {% if month|add:"0" == current_month %}selected{% endif %}>
+                        {% if month == "1" %}Enero{% elif month == "2" %}Febrero{% elif month == "3" %}Marzo
+                        {% elif month == "4" %}Abril{% elif month == "5" %}Mayo{% elif month == "6" %}Junio
+                        {% elif month == "7" %}Julio{% elif month == "8" %}Agosto{% elif month == "9" %}Septiembre
+                        {% elif month == "10" %}Octubre{% elif month == "11" %}Noviembre{% else %}Diciembre{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <select id="yearSelector" class="form-select">
+                    {% for year in "2024 2025 2026 2027 2028" %}
+                    <option value="{{ year }}" {% if year|add:"0" == current_year %}selected{% endif %}>{{ year }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-outline-primary" onclick="loadEventsByMonth()">
+                    <i class="bi bi-search"></i> Buscar
+                </button>
+            </div>
+        </div>
+        <div class="col-md-6 text-end">
+            <div class="btn-group" role="group">
+                <button class="btn btn-outline-secondary btn-sm" onclick="previousMonth()">
+                    <i class="bi bi-chevron-left"></i> Anterior
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="currentMonth()">
+                    Hoy
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="nextMonth()">
+                    Siguiente <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Events List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calendar-event"></i> Eventos del Mes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="events-container">
+                        <div class="text-center text-muted py-5">
+                            <i class="bi bi-calendar-x" style="font-size: 3rem;"></i>
+                            <p class="mt-3">No hay eventos para mostrar</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- No Calendar Message -->
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>No hay calendario académico configurado.</strong>
+                {% if can_manage_calendar %}
+                Por favor, crea un calendario para comenzar a gestionar eventos.
+                {% else %}
+                Contacta con el personal administrativo para crear el calendario.
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Create Calendar Modal -->
+<div class="modal fade" id="createCalendarModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Crear Nuevo Calendario Académico</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createCalendarForm" onsubmit="handleCreateCalendar(event)">
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Año Académico *</label>
+                            <input type="number" class="form-control" name="academic_year" 
+                                   value="{{ current_year }}" min="2024" max="2030" required>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" name="is_current_year" id="isCurrentYear">
+                                <label class="form-check-label" for="isCurrentYear">
+                                    Marcar como año actual
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="mb-3">Fechas del Año Escolar</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Inicio del Año Escolar *</label>
+                            <input type="date" class="form-control" name="year_start_date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Término del Año Escolar *</label>
+                            <input type="date" class="form-control" name="year_end_date" required>
+                        </div>
+                    </div>
+
+                    <h6 class="mb-3">Primer Semestre</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Inicio *</label>
+                            <input type="date" class="form-control" name="first_semester_start" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Término *</label>
+                            <input type="date" class="form-control" name="first_semester_end" required>
+                        </div>
+                    </div>
+
+                    <h6 class="mb-3">Segundo Semestre</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Inicio *</label>
+                            <input type="date" class="form-control" name="second_semester_start" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Término *</label>
+                            <input type="date" class="form-control" name="second_semester_end" required>
+                        </div>
+                    </div>
+
+                    <h6 class="mb-3">Vacaciones de Invierno (Opcional)</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Inicio</label>
+                            <input type="date" class="form-control" name="winter_vacation_start">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Término</label>
+                            <input type="date" class="form-control" name="winter_vacation_end">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Notas Adicionales</label>
+                        <textarea class="form-control" name="notes" rows="3" 
+                                  placeholder="Información adicional sobre el año académico"></textarea>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="create_default_courses" 
+                               id="createDefaultCourses" checked>
+                        <label class="form-check-label" for="createDefaultCourses">
+                            Crear cursos por defecto (1º Básico a 4º Medio, secciones A y B)
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Calendario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Create Event Modal -->
+<div class="modal fade" id="createEventModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Crear Nuevo Evento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createEventForm" onsubmit="handleCreateEvent(event)">
+                <input type="hidden" name="calendar_id" value="{{ current_calendar.id }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Título del Evento *</label>
+                        <input type="text" class="form-control" name="title" required 
+                               placeholder="Ej: Feriado 18 de Septiembre">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Evento *</label>
+                        <select class="form-select" name="event_type" required>
+                            <option value="holiday">Feriado</option>
+                            <option value="vacation">Vacaciones</option>
+                            <option value="exam_period">Período de Evaluaciones</option>
+                            <option value="parent_meeting">Reunión de Apoderados</option>
+                            <option value="teacher_meeting">Reunión Técnica</option>
+                            <option value="field_trip">Salida Pedagógica</option>
+                            <option value="ceremony">Ceremonia/Acto</option>
+                            <option value="workshop">Jornada/Taller</option>
+                            <option value="emergency">Suspensión de Clases</option>
+                            <option value="other">Otro</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        <textarea class="form-control" name="description" rows="3" 
+                                  placeholder="Detalles adicionales del evento"></textarea>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Fecha de Inicio *</label>
+                            <input type="date" class="form-control" name="start_date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Fecha de Término *</label>
+                            <input type="date" class="form-control" name="end_date" required>
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="is_all_day" 
+                               id="isAllDay" checked onchange="toggleTimeFields()">
+                        <label class="form-check-label" for="isAllDay">
+                            Evento de todo el día
+                        </label>
+                    </div>
+
+                    <div class="row mb-3" id="timeFields" style="display:none;">
+                        <div class="col-md-6">
+                            <label class="form-label">Hora de Inicio</label>
+                            <input type="time" class="form-control" name="start_time">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Hora de Término</label>
+                            <input type="time" class="form-control" name="end_time">
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="affects_all_courses" 
+                               id="affectsAllCourses" checked>
+                        <label class="form-check-label" for="affectsAllCourses">
+                            Afecta a todos los cursos
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="classes_suspended" 
+                               id="classesSuspended">
+                        <label class="form-check-label" for="classesSuspended">
+                            Se suspenden las clases
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Crear Evento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay" style="display:none;">
+    <div class="spinner-border text-light" role="status">
+        <span class="visually-hidden">Cargando...</span>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Global variables
+let currentCalendarId = '{{ current_calendar.id }}';
+let selectedMonth = new Date().getMonth() + 1;
+let selectedYear = new Date().getFullYear();
+
+// Utility functions
+function showLoading() {
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+function showAlert(message, type = 'success') {
+    const alertContainer = document.getElementById('alert-container');
+    const alertId = 'alert-' + Date.now();
+    
+    const alertHTML = `
+        <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    alertContainer.innerHTML = alertHTML;
+    
+    setTimeout(() => {
+        const alert = document.getElementById(alertId);
+        if (alert) {
+            alert.remove();
+        }
+    }, 5000);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Calendar management
+async function handleCreateCalendar(event) {
+    event.preventDefault();
+    showLoading();
+    
+    const formData = new FormData(event.target);
+    const data = {
+        academic_year: parseInt(formData.get('academic_year')),
+        year_start_date: formData.get('year_start_date'),
+        year_end_date: formData.get('year_end_date'),
+        first_semester_start: formData.get('first_semester_start'),
+        first_semester_end: formData.get('first_semester_end'),
+        second_semester_start: formData.get('second_semester_start'),
+        second_semester_end: formData.get('second_semester_end'),
+        winter_vacation_start: formData.get('winter_vacation_start') || null,
+        winter_vacation_end: formData.get('winter_vacation_end') || null,
+        notes: formData.get('notes'),
+        is_current_year: formData.get('is_current_year') === 'on',
+        create_default_courses: formData.get('create_default_courses') === 'on'
+    };
+    
+    try {
+        const response = await fetch('/api/calendar/create/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            showAlert(result.message, 'success');
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            showAlert(result.message, 'danger');
+        }
+    } catch (error) {
+        console.error('Error creating calendar:', error);
+        showAlert('Error al crear el calendario', 'danger');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Event management
+async function handleCreateEvent(event) {
+    event.preventDefault();
+    showLoading();
+    
+    const formData = new FormData(event.target);
+    const data = {
+        calendar_id: currentCalendarId,
+        title: formData.get('title'),
+        description: formData.get('description'),
+        event_type: formData.get('event_type'),
+        start_date: formData.get('start_date'),
+        end_date: formData.get('end_date'),
+        start_time: formData.get('start_time') || null,
+        end_time: formData.get('end_time') || null,
+        is_all_day: formData.get('is_all_day') === 'on',
+        affects_all_courses: formData.get('affects_all_courses') === 'on',
+        classes_suspended: formData.get('classes_suspended') === 'on'
+    };
+    
+    try {
+        const response = await fetch('/api/event/create/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            showAlert(result.message, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('createEventModal')).hide();
+            event.target.reset();
+            loadEventsByMonth();
+        } else {
+            showAlert(result.message, 'danger');
+        }
+    } catch (error) {
+        console.error('Error creating event:', error);
+        showAlert('Error al crear el evento', 'danger');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Load events by month
+async function loadEventsByMonth() {
+    if (!currentCalendarId) return;
+    
+    selectedMonth = parseInt(document.getElementById('monthSelector').value);
+    selectedYear = parseInt(document.getElementById('yearSelector').value);
+    
+    showLoading();
+    
+    try {
+        const response = await fetch(
+            `/api/calendar/${currentCalendarId}/events/${selectedYear}/${selectedMonth}/`
+        );
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            displayEvents(result.events);
+        }
+    } catch (error) {
+        console.error('Error loading events:', error);
+        showAlert('Error al cargar eventos', 'danger');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Display events
+function displayEvents(events) {
+    const container = document.getElementById('events-container');
+    
+    if (!events || events.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-calendar-x" style="font-size: 3rem;"></i>
+                <p class="mt-3">No hay eventos para este mes</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    events.forEach(event => {
+        const startDate = new Date(event.start_date);
+        const endDate = new Date(event.end_date);
+        const duration = event.duration_days || 1;
+        
+        html += `
+            <div class="event-item event-type-${event.event_type} p-3 mb-2 rounded">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">${event.title}</h6>
+                        <p class="text-muted mb-1 small">${event.event_type_display}</p>
+                        ${event.description ? `<p class="mb-1 small">${event.description}</p>` : ''}
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-calendar"></i> 
+                                ${startDate.toLocaleDateString('es-CL')}
+                                ${duration > 1 ? ` - ${endDate.toLocaleDateString('es-CL')}` : ''}
+                            </span>
+                            ${event.classes_suspended ? '<span class="badge bg-danger">Clases Suspendidas</span>' : ''}
+                            ${!event.is_all_day ? `<span class="badge bg-info">${event.start_time} - ${event.end_time}</span>` : ''}
+                        </div>
+                    </div>
+                    {% if can_manage_calendar %}
+                    <div class="btn-group-sm">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editEvent('${event.id}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteEvent('${event.id}', '${event.title}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Delete event
+async function deleteEvent(eventId, eventTitle) {
+    if (!confirm(`¿Estás seguro de eliminar el evento "${eventTitle}"?`)) {
+        return;
+    }
+    
+    showLoading();
+    
+    try {
+        const response = await fetch(`/api/event/${eventId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            showAlert(result.message, 'success');
+            loadEventsByMonth();
+        } else {
+            showAlert(result.message, 'danger');
+        }
+    } catch (error) {
+        console.error('Error deleting event:', error);
+        showAlert('Error al eliminar el evento', 'danger');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Month navigation
+function previousMonth() {
+    if (selectedMonth === 1) {
+        selectedMonth = 12;
+        selectedYear--;
+    } else {
+        selectedMonth--;
+    }
+    updateSelectors();
+    loadEventsByMonth();
+}
+
+function nextMonth() {
+    if (selectedMonth === 12) {
+        selectedMonth = 1;
+        selectedYear++;
+    } else {
+        selectedMonth++;
+    }
+    updateSelectors();
+    loadEventsByMonth();
+}
+
+function currentMonth() {
+    selectedMonth = new Date().getMonth() + 1;
+    selectedYear = new Date().getFullYear();
+    updateSelectors();
+    loadEventsByMonth();
+}
+
+function updateSelectors() {
+    document.getElementById('monthSelector').value = selectedMonth;
+    document.getElementById('yearSelector').value = selectedYear;
+}
+
+// Toggle time fields
+function toggleTimeFields() {
+    const isAllDay = document.getElementById('isAllDay').checked;
+    document.getElementById('timeFields').style.display = isAllDay ? 'none' : 'block';
+}
+
+// Load events on page load
+document.addEventListener('DOMContentLoaded', function() {
+    if (currentCalendarId) {
+        loadEventsByMonth();
+    }
+});
+</script>
+{% endblock %}
