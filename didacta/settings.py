@@ -96,6 +96,7 @@ DATABASES = {
             'password': 'didacta_password',
             'authSource': 'admin'
         }
+    }
 }
 
 
