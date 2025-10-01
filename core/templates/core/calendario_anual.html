@@ -1,0 +1,129 @@
+
+{% extends "base.html" %}
+
+{% block title %}Calendario Anual{% endblock %}
+
+{% block content %}
+    <h1>Calendario Anual {{ year }}</h1>
+    
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{% url 'calendario_anual' year|add:'-1' %}" class="btn btn-secondary">&laquo; Año Anterior</a>
+        <div class="btn-group" role="group">
+            <a href="#" class="btn btn-primary active">Año</a>
+            <a href="{% url 'calendario_semanal_actual' %}" class="btn btn-outline-primary">Semana</a>
+        </div>
+        <a href="{% url 'calendario_anual' year|add:'1' %}" class="btn btn-secondary">Año Siguiente &raquo;</a>
+    </div>
+
+    <div class="row">
+        {% for mes_info in meses_con_eventos %}
+            <div class="col-md-4 col-sm-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <a href="{% url 'calendario_mensual' year mes_info.numero %}" class="text-decoration-none">
+                                {{ mes_info.nombre }}
+                            </a>
+                        </h5>
+                        <small class="text-muted">{{ mes_info.cantidad }} evento{{ mes_info.cantidad|pluralize }}</small>
+                    </div>
+                    <div class="card-body">
+                        {% if mes_info.eventos %}
+                            <div class="list-group list-group-flush">
+                                {% for evento in mes_info.eventos|slice:":5" %}
+                                    <div class="list-group-item list-group-item-action p-2">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h6 class="mb-1">
+                                                {{ evento.titulo }}
+                                                {% if evento.fecha_inicio.date != evento.fecha_fin.date %}
+                                                    <span class="badge bg-info">Multi-día</span>
+                                                {% endif %}
+                                            </h6>
+                                            <small>
+                                                {% if evento.fecha_inicio.date == evento.fecha_fin.date %}
+                                                    {{ evento.fecha_inicio|date:"d M" }}
+                                                {% else %}
+                                                    {{ evento.fecha_inicio|date:"d M" }} - {{ evento.fecha_fin|date:"d M" }}
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                        <p class="mb-1 small">{{ evento.descripcion|truncatechars:50 }}</p>
+                                        <small>
+                                            {% if evento.fecha_inicio.date == evento.fecha_fin.date %}
+                                                {{ evento.fecha_inicio|date:"H:i" }} - {{ evento.fecha_fin|date:"H:i" }}
+                                            {% else %}
+                                                Desde {{ evento.fecha_inicio|date:"d M H:i" }} hasta {{ evento.fecha_fin|date:"d M H:i" }}
+                                            {% endif %}
+                                        </small>
+                                        {% if is_admin %}
+                                            <div class="mt-1">
+                                                <a href="{% url 'evento_editar' evento.pk %}" class="btn btn-sm btn-outline-secondary">Editar</a>
+                                                <a href="{% url 'evento_eliminar' evento.pk %}" class="btn btn-sm btn-outline-danger">Eliminar</a>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                                {% if mes_info.cantidad > 5 %}
+                                    <div class="list-group-item text-center">
+                                        <a href="{% url 'calendario_mensual' year mes_info.numero %}" class="btn btn-sm btn-outline-primary">
+                                            Ver {{ mes_info.cantidad|add:"-5" }} evento{{ mes_info.cantidad|add:"-5"|pluralize }} más
+                                        </a>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted small">No hay eventos programados</p>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer text-center">
+                        <a href="{% url 'calendario_mensual' year mes_info.numero %}" class="btn btn-sm btn-outline-primary">Ver mes completo</a>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% if is_admin %}
+        <div class="text-center mt-4">
+            <a href="{% url 'evento_crear' %}" class="btn btn-primary">Crear Evento</a>
+        </div>
+    {% endif %}
+
+    <!-- Resumen estadístico del año -->
+    <div class="mt-5">
+        <h3>Resumen del Año {{ year }}</h3>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Total de Eventos</h5>
+                        <h2 class="text-primary">{{ total_eventos }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Mes más Activo</h5>
+                        <h6 class="text-success">
+                            {% if mes_mas_activo %}
+                                {{ mes_mas_activo }} ({{ max_eventos_mes }})
+                            {% else %}
+                                Sin eventos
+                            {% endif %}
+                        </h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Meses con Eventos</h5>
+                        <h2 class="text-info">{{ meses_con_eventos_count }}/12</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+

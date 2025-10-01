@@ -1,0 +1,88 @@
+
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Calendario Mensual{% endblock %}
+
+{% block content %}
+    <h1>Calendario Mensual {{ month|date:"F" }} {{ year }}</h1>
+
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{% url 'calendario_mensual' year month|add:'-1' %}" class="btn btn-secondary">&laquo; Mes Anterior</a>
+        <div class="btn-group" role="group">
+            <a href="{% url 'calendario_anual' year %}" class="btn btn-outline-primary">Año</a>
+            <a href="#" class="btn btn-primary active">Mes</a>
+            <a href="{% url 'calendario_semanal_actual' %}" class="btn btn-outline-primary">Semana</a>
+        </div>
+        <a href="{% url 'calendario_mensual' year month|add:'1' %}" class="btn btn-secondary">Mes Siguiente &raquo;</a>
+    </div>
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Lun</th>
+                <th>Mar</th>
+                <th>Mié</th>
+                <th>Jue</th>
+                <th>Vie</th>
+                <th>Sáb</th>
+                <th>Dom</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for week in month_days %}
+                <tr>
+                    {% for day in week %}
+                        <td class="{% if day.month != month %}text-muted{% endif %}" style="height: 120px; vertical-align: top;">
+                            {% if day.day %}
+                                <div class="fw-bold mb-1">
+                                    <a href="{% url 'calendario_diario' day.year day.month day.day %}" class="text-decoration-none">{{ day.day }}</a>
+                                </div>
+                                {% for evento in eventos %}
+                                    {% if evento.fecha_inicio.date <= day and evento.fecha_fin.date >= day %}
+                                        <div class="mb-1">
+                                            {% if evento.fecha_inicio.date == day and evento.fecha_fin.date == day %}
+                                                <!-- Evento del mismo día -->
+                                                <small class="badge bg-primary text-wrap" style="font-size: 0.65em;">
+                                                    <a href="{% url 'evento_editar' evento.pk %}" class="text-white text-decoration-none">
+                                                        {{ evento.titulo|truncatechars:15 }}
+                                                    </a>
+                                                </small>
+                                            {% elif evento.fecha_inicio.date == day %}
+                                                <!-- Evento que inicia -->
+                                                <small class="badge bg-success text-wrap" style="font-size: 0.65em;">
+                                                    <a href="{% url 'evento_editar' evento.pk %}" class="text-white text-decoration-none">
+                                                        ▶ {{ evento.titulo|truncatechars:12 }}
+                                                    </a>
+                                                </small>
+                                            {% elif evento.fecha_fin.date == day %}
+                                                <!-- Evento que termina -->
+                                                <small class="badge bg-warning text-wrap" style="font-size: 0.65em;">
+                                                    <a href="{% url 'evento_editar' evento.pk %}" class="text-white text-decoration-none">
+                                                        {{ evento.titulo|truncatechars:12 }} ◀
+                                                    </a>
+                                                </small>
+                                            {% else %}
+                                                <!-- Evento que continúa -->
+                                                <small class="badge bg-info text-wrap" style="font-size: 0.65em;">
+                                                    <a href="{% url 'evento_editar' evento.pk %}" class="text-white text-decoration-none">
+                                                        ═ {{ evento.titulo|truncatechars:12 }} ═
+                                                    </a>
+                                                </small>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if is_admin %}
+        <a href="{% url 'evento_crear' %}" class="btn btn-primary">Crear Evento</a>
+    {% endif %}
+{% endblock %}
+
