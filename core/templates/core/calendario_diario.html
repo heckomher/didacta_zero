@@ -1,0 +1,81 @@
+
+{% extends "base.html" %}
+
+{% block title %}Calendario Diario{% endblock %}
+
+{% block content %}
+    <h1>Eventos para el {{ selected_date|date:"d F Y" }}</h1>
+
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{% url 'calendario_diario' selected_date.year selected_date.month selected_date|date:'d'|add:'-1' %}" class="btn btn-secondary">&laquo; Día Anterior</a>
+        <div class="btn-group" role="group">
+            <a href="{% url 'calendario_anual' selected_date.year %}" class="btn btn-outline-primary">Año</a>
+            <a href="{% url 'calendario_mensual' selected_date.year selected_date.month %}" class="btn btn-outline-primary">Mes</a>
+            <a href="{% url 'calendario_semanal' selected_date.year selected_date|date:'W' %}" class="btn btn-outline-primary">Semana</a>
+            <a href="#" class="btn btn-primary active">Día</a>
+        </div>
+        <a href="{% url 'calendario_diario' selected_date.year selected_date.month selected_date|date:'d'|add:'1' %}" class="btn btn-secondary">Día Siguiente &raquo;</a>
+    </div>
+
+    {% if eventos %}
+        <div class="list-group">
+            {% for evento in eventos %}
+                <div class="list-group-item list-group-item-action flex-column align-items-start mb-2
+                    {% if evento.fecha_inicio.date < selected_date and evento.fecha_fin.date > selected_date %}
+                        border-info bg-light
+                    {% elif evento.fecha_inicio.date < selected_date %}
+                        border-warning
+                    {% elif evento.fecha_fin.date > selected_date %}
+                        border-success
+                    {% endif %}">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">
+                            {{ evento.titulo }}
+                            {% if evento.fecha_inicio.date != evento.fecha_fin.date %}
+                                <span class="badge bg-secondary">Evento multi-día</span>
+                            {% endif %}
+                        </h5>
+                        <div class="text-end">
+                            {% if evento.fecha_inicio.date == selected_date and evento.fecha_fin.date == selected_date %}
+                                <!-- Evento del mismo día -->
+                                <small>{{ evento.fecha_inicio|date:"H:i" }} - {{ evento.fecha_fin|date:"H:i" }}</small>
+                            {% elif evento.fecha_inicio.date == selected_date %}
+                                <!-- Evento que inicia hoy -->
+                                <small class="text-success">
+                                    <strong>Inicia:</strong> {{ evento.fecha_inicio|date:"H:i" }}<br>
+                                    <strong>Termina:</strong> {{ evento.fecha_fin|date:"d M Y H:i" }}
+                                </small>
+                            {% elif evento.fecha_fin.date == selected_date %}
+                                <!-- Evento que termina hoy -->
+                                <small class="text-warning">
+                                    <strong>Iniciado:</strong> {{ evento.fecha_inicio|date:"d M Y H:i" }}<br>
+                                    <strong>Termina:</strong> {{ evento.fecha_fin|date:"H:i" }}
+                                </small>
+                            {% else %}
+                                <!-- Evento que continúa (inició antes y termina después) -->
+                                <small class="text-info">
+                                    <strong>Continúa</strong><br>
+                                    {{ evento.fecha_inicio|date:"d M" }} - {{ evento.fecha_fin|date:"d M Y" }}
+                                </small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <p class="mb-1">{{ evento.descripcion }}</p>
+                    {% if is_admin %}
+                        <div class="d-flex justify-content-end">
+                            <a href="{% url 'evento_editar' evento.pk %}" class="btn btn-sm btn-secondary me-2">Editar</a>
+                            <a href="{% url 'evento_eliminar' evento.pk %}" class="btn btn-sm btn-danger">Eliminar</a>
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>No hay eventos programados para este día.</p>
+    {% endif %}
+
+    {% if is_admin %}
+        <a href="{% url 'evento_crear' %}" class="btn btn-primary">Crear Evento</a>
+    {% endif %}
+{% endblock %}
+

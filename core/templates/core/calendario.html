@@ -1,0 +1,32 @@
+
+{% extends "base.html" %}
+
+{% block title %}Calendario{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Mi Calendario</h1>
+    <a href="{% url 'evento_crear' %}" class="btn btn-primary">Crear Evento</a>
+</div>
+
+{% if eventos %}
+    <div class="list-group">
+        {% for evento in eventos %}
+            <div class="list-group-item list-group-item-action flex-column align-items-start mb-2">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1">{{ evento.titulo }}</h5>
+                    <small>{{ evento.fecha_inicio|date:"d M Y H:i" }} - {{ evento.fecha_fin|date:"d M Y H:i" }}</small>
+                </div>
+                <p class="mb-1">{{ evento.descripcion }}</p>
+                <div class="d-flex justify-content-end">
+                    <a href="{% url 'evento_editar' evento.pk %}" class="btn btn-sm btn-secondary me-2">Editar</a>
+                    <a href="{% url 'evento_eliminar' evento.pk %}" class="btn btn-sm btn-danger">Eliminar</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p>No hay eventos programados.</p>
+{% endif %}
+{% endblock %}
+
